@@ -1101,7 +1101,7 @@ class LongCatVideoAvatarPipeline:
 
                 self._current_timestep = t
 
-                latent_model_input = torch.cat([latents] * 2) if self.do_classifier_free_guidance else latents
+                latent_model_input = latents
                 latent_model_input = latent_model_input.to(dit_dtype)
 
                 timestep = t.expand(latent_model_input.shape[0]).to(dit_dtype)
@@ -1110,6 +1110,10 @@ class LongCatVideoAvatarPipeline:
 
                 if self.do_classifier_free_guidance and ref_target_masks is not None:
                     # Multitalk mode with CFG
+                    latent_model_input = torch.cat([latents] * 2).to(dit_dtype)
+                    timestep = t.expand(latent_model_input.shape[0]).to(dit_dtype)
+                    timestep = timestep.unsqueeze(-1).repeat(1, latent_model_input.shape[2])
+                    timestep[:, :1] = 0
                     noise_pred_uncond_text = self.dit(
                             hidden_states=latent_model_input[:1],
                             timestep=timestep[:1],
@@ -1129,6 +1133,27 @@ class LongCatVideoAvatarPipeline:
                             ref_target_masks=ref_target_masks
                         )
                     noise_pred = torch.cat([noise_pred_uncond_text, noise_pred_cond])
+                elif self.do_classifier_free_guidance:
+                    # CFG 時に2件バッチで DiT を回すとピークメモリが大きいため、
+                    # text-only 条件と audio+text 条件を順番に計算します。
+                    noise_pred_uncond_text = self.dit(
+                        hidden_states=latent_model_input,
+                        timestep=timestep,
+                        encoder_hidden_states=prompt_embeds[:1],
+                        encoder_attention_mask=prompt_attention_mask[:1],
+                        num_cond_latents=1,
+                        audio_embs=audio_cond_embs[:audio_num],
+                        ref_target_masks=ref_target_masks
+                    )
+                    noise_pred_cond = self.dit(
+                        hidden_states=latent_model_input,
+                        timestep=timestep,
+                        encoder_hidden_states=prompt_embeds[1:],
+                        encoder_attention_mask=prompt_attention_mask[1:],
+                        num_cond_latents=1,
+                        audio_embs=audio_cond_embs[audio_num:2*audio_num],
+                        ref_target_masks=ref_target_masks
+                    )
                 else:
                     # Singletalk mode
                     # Multitalk mode without CFG (e.g. use_distill with scale=1.0)
@@ -1157,8 +1182,6 @@ class LongCatVideoAvatarPipeline:
                         ref_target_masks=ref_target_masks
                     )
 
-                    noise_pred_uncond_text, noise_pred_cond = noise_pred.chunk(2)
-                    
                     noise_pred = noise_pred_uncond + text_guidance_scale * (noise_pred_cond - noise_pred_uncond_text) + audio_guidance_scale * (noise_pred_uncond_text - noise_pred_uncond)
 
                 # negate for scheduler compatibility

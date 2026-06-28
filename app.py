@@ -253,7 +253,7 @@ ACCEL_MODE_EXACT = "Exact 8-step"
 ACCEL_MODE_DBCACHE = "DBCache fast"
 ACCEL_MODE_DBCACHE_FASTER = "DBCache faster"
 SAVE_FPS = 25
-NUM_FRAMES = 125 #4n+1
+NUM_FRAMES = 249 #4n+1
 VIDEO_SECONDS = NUM_FRAMES / SAVE_FPS
 _AUDIO_EMB_CACHE = OrderedDict()
 _VOCAL_CACHE = OrderedDict()
@@ -488,21 +488,27 @@ def generate(
     generator = torch.Generator(device=device).manual_seed(int(seed))
 
     t0 = time.perf_counter()
-    with torch.inference_mode():
-        output = pipe.generate_ai2v(
-            image=image,
-            prompt=prompt,
-            negative_prompt=NEGATIVE_PROMPT,
-            resolution=resolution,
-            num_frames=num_frames,
-            num_inference_steps=8,
-            text_guidance_scale=float(text_guidance_scale),
-            audio_guidance_scale=float(audio_guidance_scale),
-            output_type="np",
-            generator=generator,
-            audio_emb=audio_emb,
-            use_distill=True,
-        )
+    try:
+        with torch.inference_mode():
+            output = pipe.generate_ai2v(
+                image=image,
+                prompt=prompt,
+                negative_prompt=NEGATIVE_PROMPT,
+                resolution=resolution,
+                num_frames=num_frames,
+                num_inference_steps=8,
+                text_guidance_scale=float(text_guidance_scale),
+                audio_guidance_scale=float(audio_guidance_scale),
+                output_type="np",
+                generator=generator,
+                audio_emb=audio_emb,
+                use_distill=True,
+            )
+    except torch.OutOfMemoryError as e:
+        torch.cuda.empty_cache()
+        raise gr.Error(
+            "CUDA out of memory. Try 480p, Exact 8-step, or guidance scales closer to 1.0."
+        ) from e
     print(f"[timing] video_generate={time.perf_counter() - t0:.2f}s mode={acceleration}", flush=True)
     if acceleration in (ACCEL_MODE_DBCACHE, ACCEL_MODE_DBCACHE_FASTER):
         print(f"[dbcache] {pipe.dit.get_dbcache_stats()}", flush=True)
