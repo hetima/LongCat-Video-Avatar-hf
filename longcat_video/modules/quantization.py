@@ -184,8 +184,10 @@ def load_quantized_dit(checkpoint_dir: str, subfolder: str = "base_model_int8", 
     # Override with kwargs
     config.update(kwargs)
 
-    # Instantiate model (empty weights)
-    model = LongCatVideoAvatarTransformer3DModel(**config)
+    # 量子化済みモデルでも通常初期化すると巨大な fp32 Linear を一時確保するため、
+    # meta デバイスで形だけ作ってから safetensors の実体を割り当てます。
+    with torch.device("meta"):
+        model = LongCatVideoAvatarTransformer3DModel(**config)
 
     # Replace Linear layers with QuantizedLinear (empty)
     skip_patterns = DEFAULT_SKIP_PATTERNS
@@ -210,21 +212,27 @@ def load_quantized_dit(checkpoint_dir: str, subfolder: str = "base_model_int8", 
         with open(index_path, "r") as f:
             index = json.load(f)
         # Load from shards
-        shard_files = set(index["weight_map"].values())
-        state_dict = {}
-        for shard_file in sorted(shard_files):
-            shard_path = os.path.join(quantized_dir, shard_file)
-            shard_dict = load_file(shard_path, device="cpu")
-            state_dict.update(shard_dict)
+        shard_files = sorted(set(index["weight_map"].values()))
     else:
         # Single file fallback
-        files = [f for f in os.listdir(quantized_dir) if f.endswith(".safetensors") and "index" not in f]
-        state_dict = {}
-        for f in sorted(files):
-            shard_dict = load_file(os.path.join(quantized_dir, f), device="cpu")
-            state_dict.update(shard_dict)
+        shard_files = sorted(f for f in os.listdir(quantized_dir) if f.endswith(".safetensors") and "index" not in f)
 
-    model.load_state_dict(state_dict, strict=True)
+    loaded_keys = set()
+    unexpected_keys = set()
+    for shard_file in shard_files:
+        shard_dict = load_file(os.path.join(quantized_dir, shard_file), device="cpu")
+        result = model.load_state_dict(shard_dict, strict=False, assign=True)
+        loaded_keys.update(shard_dict.keys())
+        unexpected_keys.update(result.unexpected_keys)
+        del shard_dict
+
+    expected_keys = set(model.state_dict().keys())
+    missing_keys = expected_keys - loaded_keys
+    if missing_keys or unexpected_keys:
+        raise RuntimeError(
+            "Error(s) in loading quantized DiT state_dict: "
+            f"missing_keys={sorted(missing_keys)}, unexpected_keys={sorted(unexpected_keys)}"
+        )
     model.eval()
 
     # Cast non-quantized parameters (Conv3d, LayerNorm, etc.) to bfloat16
