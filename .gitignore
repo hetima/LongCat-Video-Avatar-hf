@@ -6,3 +6,4 @@ _cache/
 outputs/
 weights/
 .venv/
+*.ipynb
