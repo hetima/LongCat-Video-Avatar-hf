@@ -253,7 +253,7 @@ ACCEL_MODE_EXACT = "Exact 8-step"
 ACCEL_MODE_DBCACHE = "DBCache fast"
 ACCEL_MODE_DBCACHE_FASTER = "DBCache faster"
 SAVE_FPS = 25
-NUM_FRAMES = 161 #4n+1
+NUM_FRAMES = 125 #4n+1
 VIDEO_SECONDS = NUM_FRAMES / SAVE_FPS
 _AUDIO_EMB_CACHE = OrderedDict()
 _VOCAL_CACHE = OrderedDict()
@@ -573,7 +573,7 @@ with gr.Blocks(title="LongCat-Video-Avatar 1.5", css=CUSTOM_CSS) as demo:
             audio_in = gr.Audio(label="Driving audio", type="filepath")
             prompt = gr.Textbox(
                 label="Prompt",
-                value="A person is speaking expressively, looking at the camera.",
+                value="A person is whispering in a low voice, looking at the camera.",
                 lines=3,
             )
             with gr.Row():
