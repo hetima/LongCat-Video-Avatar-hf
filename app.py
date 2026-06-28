@@ -612,7 +612,7 @@ with gr.Blocks(title="LongCat-Video-Avatar 1.5", css=CUSTOM_CSS) as demo:
                 )
             go = gr.Button("Generate", variant="primary")
         with gr.Column(scale=1):
-            video_out = gr.Video(label="Output", autoplay=True, height=420)
+            video_out = gr.Video(label="Output", autoplay=False, height=420)
             if EXAMPLES:
                 gr.Examples(
                     examples=EXAMPLES,
