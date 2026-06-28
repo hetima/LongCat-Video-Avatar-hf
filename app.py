@@ -465,6 +465,8 @@ def generate(
     seed: int,
     vocal_mode: str = VOCAL_MODE_FAST,
     acceleration: str = ACCEL_MODE_DBCACHE_FASTER,
+    text_guidance_scale: float = 1.0,
+    audio_guidance_scale: float = 1.0,
     progress=gr.Progress(track_tqdm=True),
 ):
     if not image_path:
@@ -494,8 +496,8 @@ def generate(
             resolution=resolution,
             num_frames=num_frames,
             num_inference_steps=8,
-            text_guidance_scale=1.0,
-            audio_guidance_scale=1.0,
+            text_guidance_scale=float(text_guidance_scale),
+            audio_guidance_scale=float(audio_guidance_scale),
             output_type="np",
             generator=generator,
             audio_emb=audio_emb,
@@ -547,6 +549,8 @@ def _add_example(image_path: Path, audio_path: Path, prompt_text: str, seed: int
             seed,
             VOCAL_MODE_FAST,
             ACCEL_MODE_DBCACHE_FASTER,
+            1.0,
+            1.0,
         ])
 
 _reset_example_cache_if_needed()
@@ -585,13 +589,28 @@ with gr.Blocks(title="LongCat-Video-Avatar 1.5", css=CUSTOM_CSS) as demo:
                 value=ACCEL_MODE_DBCACHE_FASTER,
                 label="Acceleration",
             )
+            with gr.Row():
+                text_guidance = gr.Slider(
+                    minimum=0.0,
+                    maximum=4.0,
+                    value=1.0,
+                    step=0.1,
+                    label="Text guidance scale",
+                )
+                audio_guidance = gr.Slider(
+                    minimum=0.0,
+                    maximum=4.0,
+                    value=1.0,
+                    step=0.1,
+                    label="Audio guidance scale",
+                )
             go = gr.Button("Generate", variant="primary")
         with gr.Column(scale=1):
             video_out = gr.Video(label="Output", autoplay=True, height=420)
             if EXAMPLES:
                 gr.Examples(
                     examples=EXAMPLES,
-                    inputs=[image_in, audio_in, prompt, resolution, seed, vocal_mode, acceleration],
+                    inputs=[image_in, audio_in, prompt, resolution, seed, vocal_mode, acceleration, text_guidance, audio_guidance],
                     outputs=video_out,
                     fn=generate,
                     cache_examples=True,
@@ -601,7 +620,7 @@ with gr.Blocks(title="LongCat-Video-Avatar 1.5", css=CUSTOM_CSS) as demo:
 
     go.click(
         generate,
-        inputs=[image_in, audio_in, prompt, resolution, seed, vocal_mode, acceleration],
+        inputs=[image_in, audio_in, prompt, resolution, seed, vocal_mode, acceleration, text_guidance, audio_guidance],
         outputs=video_out,
     )
 
